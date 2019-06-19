@@ -252,7 +252,9 @@ function create_cxx_runner()
 					bool has_stat_avg_,
 					bool has_stat_sum_,
 					bool has_sgte_,
-					bool poll_trigger_,
+					bool has_extpoll_,
+					std::vector<NOMAD::Signature *> signatures,
+					double poll_trigger_,
 					bool relative_trigger_) { //le C-main prend en entrée les attributs de l'instance julia parameters
 
 
@@ -284,6 +286,8 @@ function create_cxx_runner()
 					{bbit[i]=NOMAD::BINARY;}
 				else if (input_types_[i]=="I")
 					{bbit[i]=NOMAD::INTEGER;}
+				else if (input_types_[i]=="C")
+					{bbit[i]=NOMAD::CATEGORICAL;}
 				else
 					{bbit[i]=NOMAD::CONTINUOUS;}
 			}
@@ -331,7 +335,7 @@ function create_cxx_runner()
 			p.set_VNS_SEARCH(VNS_search_);
 			if (stat_sum_target_>0) {p.set_STAT_SUM_TARGET(stat_sum_target_);}
 			p.set_SEED(seed_);
-			p.set_EXTENDED_POLL_TRIGGER ( poll_trigger_ , relative_trigger_ );
+			if (has_extpoll_) {p.set_EXTENDED_POLL_TRIGGER ( poll_trigger_ , relative_trigger_ );}
 
 		    p.check();
 			// parameters validation
@@ -343,9 +347,9 @@ function create_cxx_runner()
 		    // custom evaluator creation
 		    Wrap_Evaluator ev   ( p , f_fun_ptr, n, m, has_sgte_);
 
-			if (s.size()>0) //if categorical variables
+			if (has_extpoll_)
 				{fptr ex_fun_ptr = reinterpret_cast<fptr>(ex_ptr);
-				Wrap_Extended_Poll ep ( p , ex_fun_ptr, s);
+				Wrap_Extended_Poll ep ( p , ex_fun_ptr, signatures);
 				NOMAD::Mads mads ( p , &ev , &ep , NULL, NULL );}
 			else
 				{NOMAD::Mads mads ( p , &ev );}
