@@ -59,10 +59,7 @@ bounds, etc.).
 	result = nomad(eval,param)
 
 """
-function nomad(eval::Function,param::nomadParameters;sgte=nothing,extpoll=nothing)
-
-	has_sgte = !isnothing(sgte)
-	has_extpoll = !isnothing(extpoll)
+function nomad(eval::Function,param::nomadParameters;surrogate=nothing,extended_poll=nothing)
 
 	#=
 	This function first wraps eval with a julia function eval_wrap
@@ -72,7 +69,10 @@ function nomad(eval::Function,param::nomadParameters;sgte=nothing,extpoll=nothin
 	init.
 	=#
 
-	check_eval_param(eval,param,sgte) #check consistency of nomadParameters with problem
+	has_sgte = !isnothing(surrogate)
+	has_extpoll = !isnothing(extended_poll)
+
+	check_eval_param(eval,param,surrogate) #check consistency of nomadParameters with problem
 
 	m=length(param.output_types)::Int64
 	n=param.dimension::Int64
@@ -127,7 +127,7 @@ function nomad(eval::Function,param::nomadParameters;sgte=nothing,extpoll=nothin
 				j_x = convert_cdoublearray_to_jlvector(x,n+1)::Vector{Float64};
 
 				if convert(Bool,j_x[n+1]) #last coordinate of input decides if we call the surrogate or not
-					(success,count_eval,bb_outputs)=sgte(j_x[1:n]);
+					(success,count_eval,bb_outputs)=surrogate(j_x[1:n]);
 				else
 					(success,count_eval,bb_outputs)=eval(j_x[1:n]);
 				end;
@@ -158,6 +158,46 @@ function nomad(eval::Function,param::nomadParameters;sgte=nothing,extpoll=nothin
 		evalwrap_void_ptr = evalwrap_void_ptr_struct.ptr::Ptr{Nothing}
 
 	end
+
+	if has_extpoll
+
+		#C++ wrapper for extended_poll
+		function extpoll_wrap(x::Ptr{Float64})
+			return icxx"""
+		    double * c_output = new double[$m+2];
+		    $:(
+
+				j_x = convert_cdoublearray_to_jlvector(x,n)::Vector{Float64};
+
+				(success,count_eval,bb_outputs)=eval(j_x);
+				bb_outputs=Float64.(bb_outputs);
+
+				#converting from Vector{Float64} to C-double[]
+				for j=1:m
+				    icxx"c_output[$j-1]=$(bb_outputs[j]);";
+				end;
+
+				#last coordinates of c_ouput correspond to success and count_eval
+				icxx"c_output[$m]=0.0;";
+				icxx"c_output[$m+1]=0.0;";
+				if success
+					icxx"c_output[$m]=1.0;";
+				end;
+				if count_eval
+					icxx"c_output[$m+1]=1.0;";
+				end;
+
+				nothing
+		    );
+		    return c_output;
+		    """
+		end
+
+		#struct containing void pointer toward eval_wrap
+		evalwrap_void_ptr_struct = @cfunction($eval_wrap, Ptr{Cdouble}, (Ptr{Cdouble},))::Base.CFunction
+		#void pointer toward eval_wrap
+		evalwrap_void_ptr = evalwrap_void_ptr_struct.ptr::Ptr{Nothing}
+
 
 	#converting param attributes into C++ variables
 	c_input_types=convert_vectorstring(param.input_types,n)
