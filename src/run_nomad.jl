@@ -250,17 +250,6 @@ function convert_cdoublearray_to_jlvector(c_vector,size)
 	return jl_vector
 end
 
-function convert_vectorstring(jl_vectorstring,size)
-	return icxx"""std::vector<std::string> c_vectorstring;
-					$:(
-						for i=1:size
-							icxx"c_vectorstring.push_back($(pointer(jl_vectorstring[i])));";
-						end;
-						nothing
-					);
-					return c_vectorstring;"""
-end
-
 function convert_string(jl_string)
 	return pointer(jl_string)
 end
@@ -290,20 +279,55 @@ function convert_x0_to_nomadpoints_list(jl_x0)
 				return c_x0;"""
 end
 
-function convert_input_types(param.input_types,n)
-	return icxx"""vector<NOMAD::bb_input_type> bbit (n);
-					for (int i = 0; i < n; ++i) {
-						if (input_types_[i]=="B")
-							{bbit[i]=NOMAD::BINARY;}
-						else if (input_types_[i]=="I")
-							{bbit[i]=NOMAD::INTEGER;}
-						else if (input_types_[i]=="C")
-							{bbit[i]=NOMAD::CATEGORICAL;}
-						else
-							{bbit[i]=NOMAD::CONTINUOUS;}
-					}
+function convert_input_types(it,n)
+	return icxx"""vector<NOMAD::bb_input_type> bbit ($n);
+					$:(
+						for i=1:n
+							if it[i]=="B"
+								icxx"bbit[$i-1]=NOMAD::BINARY;";
+							elseif it[i]=="I"
+								icxx"bbit[$i-1]=NOMAD::INTEGER;";
+							elseif it[i]=="C"
+								icxx"bbit[$i-1]=NOMAD::CATEGORICAL;";
+							else
+								icxx"bbit[$i-1]=NOMAD::CONTINUOUS;";
+							end;
+						end;
+							nothing
+					);
 					return bbit;"""
 end
+
+function convert_output_types(ot,m)
+	icxx"""vector<NOMAD::bb_output_type> bbot ($m);
+			$:(
+				for j=1:m
+					if ot[j]=="OBJ"
+						icxx"bbot[$j-1]=NOMAD::OBJ;";
+					elseif ot[j]=="EB"
+						icxx"bbot[$j-1]=NOMAD::EB;";
+					elseif ot[j] in ["PB","CSTR"]
+						icxx"bbot[$j-1]=NOMAD::PB;";
+					elseif ot[j] in ["PEB","PEB_P"]
+						icxx"bbot[$j-1]=NOMAD::PEB_P;";
+					elseif ot[j]=="PEB_E"
+						icxx"bbot[$j-1]=NOMAD::PEB_E;";
+					elseif ot[j] in ["F","FILTER"]
+						icxx"bbot[$j-1]=NOMAD::FILTER;";
+					elseif ot[j]=="CNT_EVAL"
+						icxx"bbot[$j-1]=NOMAD::CNT_EVAL;";
+					elseif ot[j]=="STAT_AVG"
+						icxx"bbot[$j-1]=NOMAD::STAT_AVG;";
+					elseif ot[j]=="STAT_SUM"
+						icxx"bbot[$j-1]=NOMAD::STAT_SUM;";
+					else
+						icxx"bbot[$j-1]=NOMAD::UNDEFINED_BBO;";
+					end;
+				end;
+			);
+			return bbot;"""
+end
+
 
 function convert_signatures(sign)
 	return icxx"""std::vector<NOMAD::Signature *> c_sign;
@@ -318,8 +342,9 @@ function convert_signatures(sign)
 end
 
 function convert_signature(s)
+	c_input_types=convert_input_types(s.input_types,length(s.input_types))
 	return icxx"""NOMAD_Signature * c_s = new Signature ( s.dimension                         ,
-														 bbit_1                     ,
+														 c_input_types                     ,
 														 d0_1                       ,
 														 lb_1                       ,
 														 ub_1                       ,
