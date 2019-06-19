@@ -16,6 +16,7 @@ function init(path_to_nomad::String)
 	@info "loading NOMAD libraries"
 	nomad_libs_call(path_to_nomad)
 	create_Evaluator_class()
+	create_Extended_Poll_class()
 	create_Cresult_class()
 	create_cxx_runner()
 end
@@ -136,6 +137,67 @@ function create_Evaluator_class()
 	"""
 end
 
+function create_Extended_Poll_class()
+
+	cxx"""class Wrap_Extended_Poll : public Extended_Poll
+		{
+
+		private:
+
+			// signatures
+			std::vector<NOMAD::Signature *> s;
+
+			double * (*extendwrap)(double * input);
+
+		public:
+
+			// constructor:
+			Wrap_Extended_Poll ( const NOMAD::Parameters & p,  double * (*g)(double * input) , std::vector<NOMAD::Signature *> sign) :
+
+			NOMAD::Extended_Poll ( p ) {s=sign;}
+
+			// destructor:
+			~My_Extended_Poll ( void ) {
+
+				for (int i = 0; i < s.size(); ++i) {
+					delete s[i];
+				}
+
+			 }
+
+			// construct the extended poll points:
+			void construct_extended_points ( const Eval_Point & x ) {
+
+				n = x.get_n();
+				double c_x[n];
+				for (int i = 0; i < n; ++i) {
+					c_x[i]=x[i].value();
+				} //first converting our NOMAD::Eval_Point to a double[]
+
+				double * c_poll_points = extendwrap(c_x);
+				//first coordinate is the number of extended poll points
+				//then extended poll points are all concatenated in this
+				//double[], each one preceded by the index of its signature.
+
+				int num_pp = c_poll_points[0]; //number of extended poll points
+
+				int index = 1;
+
+				for (int i = 0; i < num_pp; ++i) {
+					int sign_index = static_cast<int> ( c_poll_points[index] );
+					NOMAD::Signature * pp_sign = s[sign_index];
+					int npp = pp_sign->get_n(); //dimension of poll point
+					NOMAD::Point pp (npp);
+					for (int j = 0; j < npp; ++j) {
+						pp[j] = c_poll_points[index+1+j]
+					}
+					NOMAD::add_extended_poll_point ( pp , *pp_sign );
+					index += npp+1;
+				} //Extracting extended poll points from double[] returned by extendwrap
+
+			}
+
+		};
 """
 
 	create_cxx_runner()
@@ -167,6 +229,8 @@ function create_cxx_runner()
 		Cresult cpp_runner(int n,
 					int m,
 					void* f_ptr,
+					void* ex_ptr,
+					std::vector<NOMAD::Signature *> s
 					std::vector<std::string> input_types_,
 					std::vector<std::string> output_types_,
 					bool display_all_eval_,
@@ -187,7 +251,9 @@ function create_cxx_runner()
 					int seed_,
 					bool has_stat_avg_,
 					bool has_stat_sum_,
-					bool has_sgte_) { //le C-main prend en entrée les attributs de l'instance julia parameters
+					bool has_sgte_,
+					bool poll_trigger_,
+					bool relative_trigger_) { //le C-main prend en entrée les attributs de l'instance julia parameters
 
 
 			//Attention l'utilisation des std::string peut entrainer une erreur selon la version du compilateur qui a été utilisé pour générer les librairies NOMAD
@@ -265,6 +331,7 @@ function create_cxx_runner()
 			p.set_VNS_SEARCH(VNS_search_);
 			if (stat_sum_target_>0) {p.set_STAT_SUM_TARGET(stat_sum_target_);}
 			p.set_SEED(seed_);
+			p.set_EXTENDED_POLL_TRIGGER ( poll_trigger_ , relative_trigger_ );
 
 		    p.check();
 			// parameters validation
@@ -276,9 +343,15 @@ function create_cxx_runner()
 		    // custom evaluator creation
 		    Wrap_Evaluator ev   ( p , f_fun_ptr, n, m, has_sgte_);
 
+			if (s.size()>0) //if categorical variables
+				{fptr ex_fun_ptr = reinterpret_cast<fptr>(ex_ptr);
+				Wrap_Extended_Poll ep ( p , ex_fun_ptr, s);
+				NOMAD::Mads mads ( p , &ev , &ep , NULL, NULL );}
+			else
+				{NOMAD::Mads mads ( p , &ev );}
+
 
 		    // algorithm creation and execution
-			NOMAD::Mads mads ( p , &ev );
 
 			mads.run();
 

@@ -170,6 +170,7 @@ mutable struct nomadParameters
     VNS_search::Bool
     stat_sum_target::Float64
     seed::Int32
+    signatures::Vector{nomadSignature}
 
     function nomadParameters(xZero::AbstractVector,outputTypes::Vector{String})
         if typeof(xZero[1])<:AbstractVector
@@ -194,6 +195,7 @@ mutable struct nomadParameters
         VNS_search=false
         stat_sum_target=Inf
         seed=0
+        signatures=[]
         new(dimension,xZero,input_types,output_types,lower_bound,upper_bound,display_all_eval,
         display_stats,display_degree,max_bb_eval,max_time,LH_init,LH_iter,sgte_cost,granularity,
         stop_if_feasible,VNS_search,stat_sum_target,seed)
@@ -203,6 +205,6 @@ mutable struct nomadParameters
     function nomadParameters(p::nomadParameters)
         new(p.dimension,copy(p.x0),copy(p.input_types),copy(p.output_types),copy(p.lower_bound),copy(p.upper_bound),
         p.display_all_eval, p.display_stats,p.display_degree,p.max_bb_eval,p.max_time,p.LH_init,p.LH_iter,p.sgte_cost,
-        copy(p.granularity),p.stop_if_feasible,p.VNS_search,p.stat_sum_target,p.seed)
+        copy(p.granularity),p.stop_if_feasible,p.VNS_search,p.stat_sum_target,p.seed,copy(p.signatures))
     end
 end
