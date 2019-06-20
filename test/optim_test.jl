@@ -60,6 +60,35 @@ function eval5(x)
 	return (success,count_eval,bb_outputs)
 end
 
+function eval6(x)
+	x.-=1
+	if x[1]==1
+		f=0.5+sum(x[4:end].^2)
+	elseif x[1]==0
+		f=sum(x[4:end].^2)
+	else
+		error("x[1] is not a boolean")
+	end
+	success=true
+	count_eval=true
+	bb_outputs = [f]
+	return (success,count_eval,bb_outputs)
+end
+
+function extpoll(x)
+	if length(x[2:end])==3 && x[1]==1 #if dimension=3 and objective function is first one
+		p1=[1,x[4]+2,x[5]+2]
+		s1_i=1 #dimension is changed to 2
+		p2=[0,x[4],x[5],x[6]]
+		s2_i=0 #objective function is switched
+		return ([p1,p2],[s1_i,s2_i])
+	else
+		p1=[0,x[4]+0.3,x[5]+0.3]
+		s1_i=2 #granularity is set to 0.01
+		return ([p1],[s1_i])
+	end
+end
+
 param1=nomadParameters([5,5],["OBJ"])
 param1.max_bb_eval=100
 
@@ -89,6 +118,15 @@ param5.granularity[3]=0.2
 param6=nomadParameters([[-14,70],[1,2]],["OBJ","PB"])
 param6.display_all_eval=true
 param6.stop_if_feasible=true
+
+param7=nomadParameters([1,10,10,10],["OBJ"]) #first coordinate choose the objective function
+param7.input_types=["C","R","R","R"]
+param7.granularity[4:end].=2
+sign1=nomadSignature(["C","R","R"]) #both dimension and granularity can be modified
+sign1.granularity[4:end].=2
+sign2=nomadSignature(["C","R","R"])
+sign2.granularity[4:end].=0.01
+push!(param7.signatures,sign1,sign2)
 
 #classic run
 result1 = nomad(eval1,param1)
@@ -126,3 +164,6 @@ result6 = nomad(eval2,param6)
 @test result6.success
 test_results_consistency(result6,param6,eval2)
 disp(result6)
+
+#categorical variables
+result7 = nomad(eval6,param7;extended_poll=extpoll)

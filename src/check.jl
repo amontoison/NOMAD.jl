@@ -104,7 +104,7 @@ function check_input_types(p)
 					end
 				elseif p.input_types[i]=="B"
 					x0[i] in [0,1] ? nothing : error("NOMAD.jl error : wrong parameters, coordinate $i of an inital point x0 is not binary as specified in nomadParameters.input_types")
-				elseif p.input_types[i] != "R"
+				elseif (p.input_types[i] != "R") && (p.input_types[i] != "C")
 					error("NOMAD.jl error : wrong parameters, unknown input type $(p.input_types[i])")
 				end
 			end
@@ -126,7 +126,7 @@ function check_granularity(p)
 					error("NOMAD.jl error : wrong parameters, $(i)th coordinate of initial point is not a multiple of $(i)th granularity")
 				end
 			end
-		elseif p.input_types[i] in ["I","B"]
+		elseif p.input_types[i] in ["I","B","C"]
 			p.granularity[i] in [0,1] || warn("NOMAD.jl warning : $(i)th coordinate of nomadParameters.granularity is automatically set to 1")
 			p.granularity[i]=1
 		end

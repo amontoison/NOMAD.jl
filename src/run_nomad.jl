@@ -77,69 +77,36 @@ function nomad(eval::Function,param::nomadParameters;surrogate=nothing,extended_
 	m=length(param.output_types)::Int64
 	n=param.dimension::Int64
 
-	if !has_sgte
+	#C++ wrapper for eval(x) and surrogate
+	function eval_wrap(x::Ptr{Float64})
 
-		#C++ wrapper for eval(x)
-		function eval_wrap(x::Ptr{Float64})
+		j_x = convert_cdoublearray_to_jlvector(x,n+1)::Vector{Float64}
 
-			j_x = convert_cdoublearray_to_jlvector(x,n)::Vector{Float64};
-			(success,count_eval,bb_outputs)=eval(j_x);
-			bb_outputs=Float64.(bb_outputs);
+		if has_sgte && j_x[n+1]==1  #last coordinate of input decides if we call the surrogate or not
+			(success,count_eval,bb_outputs)=surrogate(j_x[1:n]);
+		else
+			(success,count_eval,bb_outputs)=eval(j_x[1:n]);
+		end;
+		bb_outputs=convert(Vector{Float64},bb_outputs);
 
-			return icxx"""
-		    double * c_output = new double[$m+2];
-		    $:(
-				#converting from Vector{Float64} to C-double[]
-				for j=1:m
-				    icxx"c_output[$j-1]=$(bb_outputs[j]);";
-				end;
-				nothing
-			);
-
-			//last coordinates of c_ouput correspond to success and count_eval
-			c_output[$m]=0.0;
-			c_output[$m+1]=0.0;
-			if ($success) {c_output[$m]=1.0;}
-			if ($count_eval) {c_output[$m+1]=1.0;}
-
-		    return c_output;
-		    """
-		end
-
-	else
-
-		#C++ wrapper for eval(x) and surrogate
-		function eval_wrap(x::Ptr{Float64})
-
-			j_x = convert_cdoublearray_to_jlvector(x,n+1)::Vector{Float64};
-
-			if convert(Bool,j_x[n+1]) #last coordinate of input decides if we call the surrogate or not
-				(success,count_eval,bb_outputs)=surrogate(j_x[1:n]);
-			else
-				(success,count_eval,bb_outputs)=eval(j_x[1:n]);
+		return icxx"""
+	    double * c_output = new double[$m+2];
+	    $:(
+			#converting from Vector{Float64} to C-double[]
+			for j=1:m
+			    icxx"c_output[$j-1]=$(bb_outputs[j]);";
 			end;
-			bb_outputs=convert(Vector{Float64},bb_outputs);
+			nothing
+		);
 
-			return icxx"""
-		    double * c_output = new double[$m+2];
-		    $:(
-				#converting from Vector{Float64} to C-double[]
-				for j=1:m
-				    icxx"c_output[$j-1]=$(bb_outputs[j]);";
-				end;
-				nothing
-			);
+		//last coordinates of c_ouput correspond to success and count_eval
+		c_output[$m]=0.0;
+		c_output[$m+1]=0.0;
+		if ($success) {c_output[$m]=1.0;}
+		if ($count_eval) {c_output[$m+1]=1.0;}
 
-			//last coordinates of c_ouput correspond to success and count_eval
-			c_output[$m]=0.0;
-			c_output[$m+1]=0.0;
-			if ($success) {c_output[$m]=1.0;}
-			if ($count_eval) {c_output[$m+1]=1.0;}
-
-		    return c_output;
-		    """
-		end
-
+	    return c_output;
+	    """
 	end
 
 	#struct containing void pointer toward eval_wrap
@@ -149,11 +116,19 @@ function nomad(eval::Function,param::nomadParameters;surrogate=nothing,extended_
 
 	if has_extpoll
 
+		max_signature_index=length(param.signatures)
+		sign0=nomadSignature(param.input_types)
+		sign0.lower_bound=param.lower_bound
+		sign0.upper_bound=param.upper_bound
+		sign0.granularity=param.granularity
+		pushfirst!(param.signatures,sign0)
+
 		#C++ wrapper for extpoll(x)
 		function extpoll_wrap(x::Ptr{Float64})
 
 			j_x = convert_cdoublearray_to_jlvector(x,n)::Vector{Float64};
-			extpoll_points=extended_poll(j_x);
+
+			(extpoll_points,signature_ind)=extended_poll(j_x);
 			num_pp = length(extpoll_points)
 			sizes_pp = length.(extpoll_points)
 
@@ -161,13 +136,15 @@ function nomad(eval::Function,param::nomadParameters;surrogate=nothing,extended_
 		    double * c_output = new double[1+$(sum(sizes_pp)+num_pp)];
 			c_output[0] = $num_pp;
 		    $:(
-				index=1
+				index=1;
 				for i=1:num_pp
-					icxx"c_output[$index]=$(sizes_pp[i]);";
+					s_i=signature_ind[i]
+					0<=s_i<max_signature_index || error("Extended poll error : a signature index returned by extpoll(x) is wrong")
+					icxx"c_output[$index]=$(signature_ind[i]);";
 					for j=1:sizes_pp[i]
 				    	icxx"c_output[$(index+j)]=$(extpoll_points[i][j]);";
 					end;
-					index+=sizes_pp[i]+1
+					index+=sizes_pp[i]+1;
 				end;
 				nothing
 			);
@@ -176,22 +153,22 @@ function nomad(eval::Function,param::nomadParameters;surrogate=nothing,extended_
 		    """
 		end
 
+		#struct containing void pointer toward extpoll_wrap
+		extpollwrap_void_ptr_struct = @cfunction($extpoll_wrap, Ptr{Cdouble}, (Ptr{Cdouble},))::Base.CFunction
+		#void pointer toward extpoll_wrap
+		extpollwrap_void_ptr = extpollwrap_void_ptr_struct.ptr::Ptr{Nothing}
+
 	else
 
-		function extpollwrap()
-			return 0;
-		end
+		extpollwrap_void_ptr=icxx"void * ptr; return ptr;"
 
 	end
 
-	#struct containing void pointer toward extpoll_wrap
-	extpollwrap_void_ptr_struct = @cfunction($extpoll_wrap, Ptr{Cdouble}, (Ptr{Cdouble},))::Base.CFunction
-	#void pointer toward extpoll_wrap
-	extpollwrap_void_ptr = extpollwrap_void_ptr_struct.ptr::Ptr{Nothing}
+
 
 	#converting param attributes into C++ variables
-	c_input_types=convert_vectorstring(param.input_types,n)
-	c_output_types=convert_vectorstring(param.output_types,m)
+	c_input_types=convert_input_types(param.input_types,n)
+	c_output_types=convert_output_types(param.output_types,m)
 	c_display_stats=convert_string(param.display_stats)::Cstring
 	c_x0=convert_x0_to_nomadpoints_list(param.x0)
 	c_lower_bound=convert_vector_to_nomadpoint(param.lower_bound)::CnomadPoint
@@ -246,6 +223,9 @@ function convert_cdoublearray_to_jlvector(c_vector,size)
 	jl_vector = Vector{Float64}(undef,size)
 	for i=1:size
 		jl_vector[i]=icxx"return *($c_vector+$i-1);"
+		if abs(jl_vector[i]-round(jl_vector[i]))<eps(jl_vector[i])^0.85
+			jl_vector[i]=round(jl_vector[i])
+		end
 	end
 	return jl_vector
 end
@@ -342,13 +322,48 @@ function convert_signatures(sign)
 end
 
 function convert_signature(s)
+
 	c_input_types=convert_input_types(s.input_types,length(s.input_types))
-	return icxx"""NOMAD_Signature * c_s = new Signature ( s.dimension                         ,
-														 c_input_types                     ,
-														 d0_1                       ,
-														 lb_1                       ,
-														 ub_1                       ,
-														 p.get_direction_types   () ,
-														 p.get_sec_poll_dir_types() ,
-														 p.get_int_poll_dir_types() ,
-														 _p.out()                     )
+	c_lower_bound=convert_vector_to_nomadpoint(s.lower_bound)
+	c_upper_bound=convert_vector_to_nomadpoint(s.upper_bound)
+	c_granularity=convert_vector_to_nomadpoint(s.granularity)::CnomadPoint
+
+	return icxx"""NOMAD::Display out ( std::cout );
+				  out.precision ( NOMAD::DISPLAY_PRECISION_STD );
+				  NOMAD::Parameters p ( out );
+				  p.set_DIMENSION ($(s.dimension));
+				  std::cout<<"HERE0"<<std::endl;
+				  NOMAD::Double mesh_update_basis = p.get_mesh_update_basis();
+				  std::cout<<"HERE1/2"<<std::endl;
+				  NOMAD::Double poll_update_basis = p.get_poll_update_basis();
+				  std::cout<<"HERE1"<<std::endl;
+				  int mesh_coarsening_exponent = p.get_mesh_coarsening_exponent();
+				  std::cout<<"HERE2"<<std::endl;
+				  int mesh_refining_exponent = p.get_mesh_refining_exponent();
+				  std::cout<<"HERE3"<<std::endl;
+				  std::set<NOMAD::Variable_Group*,NOMAD::VG_Comp> variable_groups = p.get_variable_groups();
+				  NOMAD::Signature * c_s = new NOMAD::Signature ( 	$(s.dimension),
+													   		$c_input_types,
+													   		$c_lower_bound,
+													   		$c_upper_bound,
+													   		p.get_mesh_type(),
+													   		p.get_anisotropic_mesh(),
+													   		p.get_anisotropy_factor(),
+													   		$c_granularity,
+													   		p.get_initial_poll_size(),
+													   		p.get_min_poll_size(),
+													   		p.get_min_mesh_size(),
+													   		mesh_update_basis,
+													   		poll_update_basis,
+													   		mesh_coarsening_exponent,
+													   		mesh_refining_exponent,
+													   		p.get_initial_mesh_index(),
+													   		p.get_scaling(),//
+													   		p.get_fixed_variables(),//
+													   		p.get_periodic_variables(),
+													   		variable_groups,
+													   		p.out()
+													   	);
+
+					return c_s;"""
+end

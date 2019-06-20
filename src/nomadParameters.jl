@@ -202,7 +202,7 @@ mutable struct nomadParameters
         relative_trigger=false
         new(dimension,xZero,input_types,output_types,lower_bound,upper_bound,display_all_eval,
         display_stats,display_degree,max_bb_eval,max_time,LH_init,LH_iter,sgte_cost,granularity,
-        stop_if_feasible,VNS_search,stat_sum_target,seed,poll_trigger,relative_trigger)
+        stop_if_feasible,VNS_search,stat_sum_target,seed,signatures,poll_trigger,relative_trigger)
     end
 
     #copy constructor

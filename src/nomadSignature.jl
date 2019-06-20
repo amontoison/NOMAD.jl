@@ -6,9 +6,8 @@ mutable struct nomadSignature
     upper_bound::Vector{Float64}
     granularity::Vector{Float64}
 
-    function nomadSignature(n)
-        dimension=n
-        input_types=[]
+    function nomadSignature(input_types::Vector{String})
+        dimension=length(input_types)
         lower_bound=[]
         upper_bound=[]
         granularity=zeros(Float64,dimension)
@@ -16,7 +15,7 @@ mutable struct nomadSignature
     end
 
     function nomadSignature(s::nomadSignature)
-        new(s.dimension,copy(s.input_types),copy(s.lower_bound),copy(s.upper_bound),copy(s.granularity)
+        new(s.dimension,copy(s.input_types),copy(s.lower_bound),copy(s.upper_bound),copy(s.granularity))
     end
 
 end
