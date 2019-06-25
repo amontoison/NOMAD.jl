@@ -23,6 +23,7 @@ function check_eval_param(eval::Function,param::nomadParameters,sgte)
 		end
 		check_sgte(sgte,eval,param)
 	end
+	check_signatures(param)
 
 end
 
@@ -65,29 +66,28 @@ function check_ranges(p)
 end
 
 function check_bounds(p)
-	if length(p.lower_bound)>0
-		length(p.lower_bound) == p.dimension ? nothing : error("NOMAD.jl error : wrong parameters, size of lower bound does not match dimension of the problem")
-		for x0 in p.x0
-			for i=1:p.dimension
-				p.lower_bound[i]<=x0[i] ? nothing : error("NOMAD.jl error : wrong parameters, an initial state x0 is outside the bounds")
-			end
-		end
+
+	if isempty(p.lower_bound)
+		p.lower_bound=fill(-Inf,p.dimension)
 	end
 
-	if length(p.upper_bound)>0
-		length(p.upper_bound) == p.dimension ? nothing : error("NOMAD.jl error : wrong parameters, size of upper bound does not match dimension of the problem")
-		for x0 in p.x0
-			for i=1:p.dimension
-				x0[i]<=p.upper_bound[i] ? nothing : error("NOMAD.jl error : wrong parameters, an initial state x0 is outside the bounds")
-			end
-		end
+	if isempty(p.upper_bound)
+		p.upper_bound=fill(Inf,p.dimension)
 	end
 
-	if (length(p.lower_bound)>0) && (length(p.upper_bound)>0)
+	length(p.lower_bound) == p.dimension ? nothing : error("NOMAD.jl error : wrong parameters, size of lower bound does not match dimension of the problem")
+	length(p.upper_bound) == p.dimension ? nothing : error("NOMAD.jl error : wrong parameters, size of upper bound does not match dimension of the problem")
+
+	for x0 in p.x0
 		for i=1:p.dimension
-			p.lower_bound[i]<p.upper_bound[i] ? nothing : error("NOMAD.jl error : wrong parameters, lower bounds should be inferior to upper bounds")
+			p.lower_bound[i]<=x0[i]<=p.upper_bound[i] ? nothing : error("NOMAD.jl error : wrong parameters, an initial state x0 is outside the bounds")
 		end
 	end
+
+	for i=1:p.dimension
+		p.lower_bound[i]<p.upper_bound[i] ? nothing : error("NOMAD.jl error : wrong parameters, lower bounds should be inferior to upper bounds")
+	end
+
 end
 
 function check_input_types(p)
@@ -126,7 +126,7 @@ function check_granularity(p)
 					error("NOMAD.jl error : wrong parameters, $(i)th coordinate of initial point is not a multiple of $(i)th granularity")
 				end
 			end
-		elseif p.input_types[i] in ["I","B","C"]
+		elseif p.input_types[i] in ["I","B"]
 			p.granularity[i] in [0,1] || warn("NOMAD.jl warning : $(i)th coordinate of nomadParameters.granularity is automatically set to 1")
 			p.granularity[i]=1
 		end
@@ -161,7 +161,7 @@ end
 
 function check_eval(ev,p)
 
-	(success,count_eval,bb_outputs)=ev(p.x0[1])
+	(success,count_eval,bb_outputs)=ev(copy(p.x0[1]))
 
 	typeof(success)==Bool ? nothing : error("NOMAD.jl error : success returned by eval(x) is not a boolean")
 	typeof(count_eval)==Bool ? nothing : error("NOMAD.jl error : count_eval returned by eval(x) is not a boolean")
@@ -178,7 +178,7 @@ end
 
 function check_sgte(sg,ev,p)
 
-	(success,count_eval,bb_outputs)=sg(p.x0[1])
+	(success,count_eval,bb_outputs)=sg(copy(p.x0[1]))
 
 	if !isnothing(bb_outputs)
 		typeof(success)==Bool ? nothing : error("NOMAD.jl error : success returned by surrogate(x) is not a boolean")
@@ -191,5 +191,17 @@ function check_sgte(sg,ev,p)
 		end
 
 		length(bb_outputs)==length(p.output_types) ? nothing : error("NOMAD.jl error : wrong parameters, dimension of bb_outputs returned by surrogate(x) does not match number of output types set in parameters")
+	end
+end
+
+function check_signatures(param)
+	for s in param.signatures
+		if isempty(s.lower_bound)
+			s.lower_bound=fill(-Inf,s.dimension)
+		end
+
+		if isempty(s.upper_bound)
+			s.upper_bound=fill(Inf,s.dimension)
+		end
 	end
 end

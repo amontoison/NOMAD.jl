@@ -84,12 +84,11 @@ function create_Evaluator_class()
 
 			double * (*evalwrap)(double * input);
 			bool sgte;
-			int n;
 			int m;
 
-		  Wrap_Evaluator  ( const NOMAD::Parameters & p, double * (*f)(double * input), int input_dim, int output_dim, bool has_sgte) :
+		  Wrap_Evaluator  ( const NOMAD::Parameters & p, double * (*f)(double * input), int output_dim, bool has_sgte) :
 
-		    NOMAD::Evaluator ( p ) {evalwrap=f; n=input_dim; m=output_dim; sgte=has_sgte;}
+		    NOMAD::Evaluator ( p ) {evalwrap=f; m=output_dim; sgte=has_sgte;}
 
 		  ~Wrap_Evaluator ( void ) {evalwrap=nullptr;}
 
@@ -98,14 +97,17 @@ function create_Evaluator_class()
 				bool                & count_eval   ) const
 			{
 
-			double c_x[n+1];
-			for (int i = 0; i < n; ++i) {
-				c_x[i]=x[i].value();
+			int n = x.get_n();
+
+			double c_x[n+2];
+
+			c_x[0] = n;
+
+			for (int i = 1; i <= n; ++i) {
+				c_x[i]=x[i-1].value();
 			} //first converting our NOMAD::Eval_Point to a double[]
 
-			if (sgte) {
-				c_x[n] = (x.get_eval_type()==NOMAD::SGTE)?1.0:0.0;
-			}
+			c_x[n+1] = (x.get_eval_type()==NOMAD::SGTE)?1.0:0.0;
 
 			double * c_bb_outputs = evalwrap(c_x);
 
@@ -169,9 +171,12 @@ function create_Extended_Poll_class()
 			void construct_extended_points ( const NOMAD::Eval_Point & x ) {
 
 				int n = x.get_n();
-				double c_x[n];
-				for (int i = 0; i < n; ++i) {
-					c_x[i]=x[i].value();
+				double c_x[n+1];
+
+				c_x[0] = n;
+
+				for (int i = 1; i <= n; ++i) {
+					c_x[i]=x[i-1].value();
 				} //first converting our NOMAD::Eval_Point to a double[]
 
 				double * c_poll_points = extpollwrap(c_x);
@@ -194,6 +199,7 @@ function create_Extended_Poll_class()
 					add_extended_poll_point ( pp , *pp_sign );
 					index += npp+1;
 				} //Extracting extended poll points from double[] returned by extendwrap
+
 
 			}
 
@@ -228,99 +234,39 @@ function create_cxx_runner()
 		#include <string>
 		#include <list>
 
-		Cresult cpp_runner(int n,
+		Cresult cpp_runner(NOMAD::Parameters * p,
+					NOMAD::Display out,
 					int m,
 					void* f_ptr,
 					void* ex_ptr,
-					vector<NOMAD::bb_input_type> input_types_,
-					vector<NOMAD::bb_output_type> output_types_,
-					bool display_all_eval_,
-					std::string display_stats_,
-					std::vector<NOMAD::Point> x0_list,
-					NOMAD::Point lower_bound_,
-					NOMAD::Point upper_bound_,
-					int max_bb_eval_,
-					int max_time_,
-					int display_degree_,
-					int LH_init_,
-					int LH_iter_,
-					int sgte_cost_,
-					NOMAD::Point granularity_,
-					bool stop_if_feasible_,
-					bool VNS_search_,
-					double stat_sum_target_,
-					int seed_,
 					bool has_stat_avg_,
 					bool has_stat_sum_,
 					bool has_sgte_,
 					bool has_extpoll_,
-					std::vector<NOMAD::Signature *> signatures,
-					double poll_trigger_,
-					bool relative_trigger_) { //le C-main prend en entrée les attributs de l'instance julia parameters
+					std::vector<NOMAD::Signature *> signatures
+					) { //le C-main prend en entrée les attributs de l'instance julia parameters
 
 
 			//Attention l'utilisation des std::string peut entrainer une erreur selon la version du compilateur qui a été utilisé pour générer les librairies NOMAD
 
-			//default main arguments, needs to be set for MPI
-			int argc;
-			char ** argv;
-
-		  // display:
-		  NOMAD::Display out ( std::cout );
-		  out.precision ( NOMAD::DISPLAY_PRECISION_STD );
-
 		  Cresult res;
 
 		  try {
-
-		    // NOMAD initializations:
-		    NOMAD::begin ( argc , argv );
-
-		    // parameters creation:
-		    NOMAD::Parameters p ( out );
-
-		    p.set_DIMENSION (n);
-
-		    p.set_BB_INPUT_TYPE ( input_types_ );
-		    p.set_BB_OUTPUT_TYPE ( output_types_ );
-			p.set_DISPLAY_ALL_EVAL(display_all_eval_);
-		    p.set_DISPLAY_STATS(display_stats_);
-			for (int i = 0; i < x0_list.size(); ++i) {p.set_X0( x0_list[i] );}  // starting points
-			if (lower_bound_.size()>0) {p.set_LOWER_BOUND( lower_bound_ );}
-			if (upper_bound_.size()>0) {p.set_UPPER_BOUND( upper_bound_ );}
-			if (max_bb_eval_>0) {p.set_MAX_BB_EVAL(max_bb_eval_);}
-			if (max_time_>0) {p.set_MAX_TIME(max_time_);}
-		    p.set_DISPLAY_DEGREE(display_degree_);
-			p.set_HAS_SGTE(has_sgte_);
-			if (has_sgte_) {p.set_SGTE_COST(sgte_cost_);}
-			p.set_STATS_FILE("temp.txt","bbe | sol | bbo");
-			p.set_LH_SEARCH(LH_init_,LH_iter_);
-			p.set_GRANULARITY(granularity_);
-			p.set_STOP_IF_FEASIBLE(stop_if_feasible_);
-			p.set_VNS_SEARCH(VNS_search_);
-			if (stat_sum_target_>0) {p.set_STAT_SUM_TARGET(stat_sum_target_);}
-			p.set_SEED(seed_);
-			if (has_extpoll_) {p.set_EXTENDED_POLL_TRIGGER ( poll_trigger_ , relative_trigger_ );}
-
-		    p.check();
-			// parameters validation
 
 			//conversion from void pointer to appropriate pointer
 			typedef double * (*fptr)(double * input);
 			fptr f_fun_ptr = reinterpret_cast<fptr>(f_ptr);
 
 		    // custom evaluator creation
-		    Wrap_Evaluator ev   ( p , f_fun_ptr, n, m, has_sgte_);
+		    Wrap_Evaluator ev   ( *p , f_fun_ptr, m, has_sgte_);
 
 			Wrap_Extended_Poll * wrap_ep_ptr=NULL;
 
-			if (has_extpoll_) {
-				fptr ex_fun_ptr = reinterpret_cast<fptr>(ex_ptr);
-				Wrap_Extended_Poll ep ( p , ex_fun_ptr, signatures);
-				wrap_ep_ptr = &ep;
-			}
+			fptr ex_fun_ptr = reinterpret_cast<fptr>(ex_ptr);
+			Wrap_Extended_Poll ep ( *p , ex_fun_ptr, signatures);
+			wrap_ep_ptr = &ep;
 
-			NOMAD::Mads mads ( p , &ev , wrap_ep_ptr , NULL, NULL );
+			NOMAD::Mads mads ( *p , &ev , wrap_ep_ptr , NULL, NULL );
 
 		    // algorithm creation and execution
 
@@ -329,13 +275,13 @@ function create_cxx_runner()
 			//saving results
 			const NOMAD::Eval_Point* bf_ptr = mads.get_best_feasible();
 			const NOMAD::Eval_Point* bi_ptr = mads.get_best_infeasible();
-			res.set_eval_points(bf_ptr,bi_ptr,n,m);
+			res.set_eval_points(bf_ptr,bi_ptr,m);
 			NOMAD::Stats stats;
 			stats = mads.get_stats();
 			res.bb_eval = stats.get_bb_eval();
 			if (has_stat_avg_) {res.stat_avg = (stats.get_stat_avg()).value();}
 			if (has_stat_sum_) {res.stat_sum = (stats.get_stat_sum()).value();}
-			res.seed = p.get_seed();
+			res.seed = p->get_seed();
 
 			mads.reset();
 
@@ -382,12 +328,13 @@ function create_Cresult_class()
 
 			Cresult(){success=false;}
 
-			void set_eval_points(const NOMAD::Eval_Point* bf_ptr,const NOMAD::Eval_Point* bi_ptr,int n,int m){
+			void set_eval_points(const NOMAD::Eval_Point* bf_ptr,const NOMAD::Eval_Point* bi_ptr,int m){
 
 				has_feasible = (bf_ptr != NULL);
 
 				if (has_feasible) {
-					for (int i = 0; i < n; ++i) {
+					int n_bf = bf_ptr->get_n();
+					for (int i = 0; i < n_bf; ++i) {
 						bf.push_back(bf_ptr->value(i));
 					}
 					for (int i = 0; i < m; ++i) {
@@ -398,7 +345,8 @@ function create_Cresult_class()
 				has_infeasible = (bi_ptr != NULL);
 
 				if (has_infeasible) {
-					for (int i = 0; i < n; ++i) {
+					int n_bi = bi_ptr->get_n();
+					for (int i = 0; i < n_bi; ++i) {
 						bi.push_back(bi_ptr->value(i));
 					}
 					for (int i = 0; i < m; ++i) {

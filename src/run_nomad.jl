@@ -59,7 +59,7 @@ bounds, etc.).
 	result = nomad(eval,param)
 
 """
-function nomad(eval::Function,param::nomadParameters;surrogate=nothing,extended_poll=nothing)
+function nomad(eval::Function,param_::nomadParameters;surrogate=nothing,extended_poll=nothing)
 
 	#=
 	This function first wraps eval with a julia function eval_wrap
@@ -69,16 +69,20 @@ function nomad(eval::Function,param::nomadParameters;surrogate=nothing,extended_
 	init.
 	=#
 
+	param=deepcopy(param_)
+
 	has_sgte = !isnothing(surrogate)
 	has_extpoll = !isnothing(extended_poll)
 
 	check_eval_param(eval,param,surrogate) #check consistency of nomadParameters with problem
 
 	m=length(param.output_types)::Int64
-	n=param.dimension::Int64
 
 	#C++ wrapper for eval(x) and surrogate
 	function eval_wrap(x::Ptr{Float64})
+
+		n = Int64(icxx"int n = ($x)[0];
+						return n;")
 
 		j_x = convert_cdoublearray_to_jlvector(x,n+1)::Vector{Float64}
 
@@ -120,11 +124,13 @@ function nomad(eval::Function,param::nomadParameters;surrogate=nothing,extended_
 		sign0=nomadSignature(param.input_types)
 		sign0.lower_bound=param.lower_bound
 		sign0.upper_bound=param.upper_bound
-		sign0.granularity=param.granularity
 		pushfirst!(param.signatures,sign0)
 
 		#C++ wrapper for extpoll(x)
 		function extpoll_wrap(x::Ptr{Float64})
+
+			n = Int64(icxx"int n = ($x)[0];
+							return n;")
 
 			j_x = convert_cdoublearray_to_jlvector(x,n)::Vector{Float64};
 
@@ -139,7 +145,7 @@ function nomad(eval::Function,param::nomadParameters;surrogate=nothing,extended_
 				index=1;
 				for i=1:num_pp
 					s_i=signature_ind[i]
-					0<=s_i<max_signature_index || error("Extended poll error : a signature index returned by extpoll(x) is wrong")
+					0<=s_i<=max_signature_index || error("Extended poll error : a signature index returned by extpoll(x) is wrong")
 					icxx"c_output[$index]=$(signature_ind[i]);";
 					for j=1:sizes_pp[i]
 				    	icxx"c_output[$(index+j)]=$(extpoll_points[i][j]);";
@@ -164,48 +170,28 @@ function nomad(eval::Function,param::nomadParameters;surrogate=nothing,extended_
 
 	end
 
+	c_out = icxx"""int argc;
+					char ** argv;
+					NOMAD::Display out ( std::cout );
+					out.precision ( NOMAD::DISPLAY_PRECISION_STD );
+					NOMAD::begin ( argc , argv );
+					return out;"""
 
+	c_parameter = convert_parameter(param,m,has_sgte,has_extpoll,c_out)
 
-	#converting param attributes into C++ variables
-	c_input_types=convert_input_types(param.input_types,n)
-	c_output_types=convert_output_types(param.output_types,m)
-	c_display_stats=convert_string(param.display_stats)::Cstring
-	c_x0=convert_x0_to_nomadpoints_list(param.x0)
-	c_lower_bound=convert_vector_to_nomadpoint(param.lower_bound)::CnomadPoint
-	c_upper_bound=convert_vector_to_nomadpoint(param.upper_bound)::CnomadPoint
-	c_granularity=convert_vector_to_nomadpoint(param.granularity)::CnomadPoint
-	c_signatures=convert_signatures(param.signatures)
+	c_signatures = convert_signatures(param.signatures,c_parameter)
 
 	#calling cpp_runner
-	c_result = @cxx cpp_runner(param.dimension,
-										length(param.output_types),
-										evalwrap_void_ptr,
-										extpollwrap_void_ptr,
-										c_input_types,
-										c_output_types,
-										param.display_all_eval,
-										c_display_stats,
-										c_x0,
-										c_lower_bound,
-										c_upper_bound,
-										param.max_bb_eval,
-										param.max_time,
-										param.display_degree,
-										param.LH_init,
-										param.LH_iter,
-										param.sgte_cost,
-										c_granularity,
-										param.stop_if_feasible,
-										param.VNS_search,
-										(param.stat_sum_target==Inf ? 0 : param.stat_sum_target),
-										param.seed,
-										("STAT_AVG" in param.output_types),
-										("STAT_SUM" in param.output_types),
-										has_sgte,
-										has_extpoll,
-										c_signatures,
-										param.poll_trigger,
-										param.relative_trigger)
+	c_result = @cxx cpp_runner(c_parameter,
+								c_out,
+								length(param.output_types),
+								evalwrap_void_ptr,
+								extpollwrap_void_ptr,
+								("STAT_AVG" in param.output_types),
+								("STAT_SUM" in param.output_types),
+								has_sgte,
+								has_extpoll,
+								c_signatures)
 
 	#creating nomadResults object to return
 	jl_result = nomadResults(c_result,param)
@@ -215,14 +201,57 @@ function nomad(eval::Function,param::nomadParameters;surrogate=nothing,extended_
 end #nomad
 
 
+
 ######################################################
 		   		#CONVERSION METHODS#
 ######################################################
 
+function convert_parameter(param,m,has_sgte,has_extpoll,out)
+
+	#converting param attributes into C++ variables
+	c_input_types=convert_input_types(param.input_types,param.dimension)
+	c_output_types=convert_output_types(param.output_types,m)
+	c_display_stats=convert_string(param.display_stats)
+	c_x0=convert_x0_to_nomadpoints_list(param.x0)
+	c_lower_bound=convert_lower_bound(param.lower_bound,param.input_types)
+	c_upper_bound=convert_upper_bound(param.upper_bound,param.input_types)
+	c_granularity=convert_vector_to_nomadpoint(param.granularity)
+
+	return icxx"""NOMAD::Parameters * p = new NOMAD::Parameters( $out );
+
+			p->set_DIMENSION ($(param.dimension));
+			p->set_BB_INPUT_TYPE ( $c_input_types );
+			p->set_BB_OUTPUT_TYPE ( $c_output_types );
+			p->set_DISPLAY_ALL_EVAL( $(param.display_all_eval) );
+			p->set_DISPLAY_STATS( $c_display_stats );
+			for (int i = 0; i < ($c_x0).size(); ++i) {p->set_X0( ($c_x0)[i] );}  // starting points
+			p->set_LOWER_BOUND( $c_lower_bound );
+			p->set_UPPER_BOUND( $c_upper_bound );
+			if ($(param.max_bb_eval)>0) {p->set_MAX_BB_EVAL($(param.max_bb_eval));}
+			if ($(param.max_time)>0) {p->set_MAX_TIME($(param.max_time));}
+			p->set_DISPLAY_DEGREE($(param.display_degree));
+			p->set_HAS_SGTE($has_sgte);
+			if ($has_sgte) {p->set_SGTE_COST($(param.sgte_cost));}
+			p->set_STATS_FILE("temp.txt","bbe | sol | bbo");
+			p->set_LH_SEARCH($(param.LH_init),$(param.LH_iter));
+			if ($(!has_extpoll)) {p->set_GRANULARITY($c_granularity);}
+			p->set_STOP_IF_FEASIBLE($(param.stop_if_feasible));
+			p->set_VNS_SEARCH($(param.VNS_search));
+			if ($(param.stat_sum_target)>0) {p->set_STAT_SUM_TARGET($(param.stat_sum_target));}
+			p->set_SEED($(param.seed));
+			p->set_EXTENDED_POLL_ENABLED($has_extpoll);
+			if ($has_extpoll) {p->set_EXTENDED_POLL_TRIGGER ( $(param.poll_trigger) , $(param.relative_trigger) );}
+
+			p->check();
+			// parameters validation
+
+			return p;"""
+end
+
 function convert_cdoublearray_to_jlvector(c_vector,size)
 	jl_vector = Vector{Float64}(undef,size)
 	for i=1:size
-		jl_vector[i]=icxx"return *($c_vector+$i-1);"
+		jl_vector[i]=icxx"return *($c_vector+$i);" #coordinate 0 is not taken into account because it indicates dimension
 		if abs(jl_vector[i]-round(jl_vector[i]))<eps(jl_vector[i])^0.85
 			jl_vector[i]=round(jl_vector[i])
 		end
@@ -234,12 +263,39 @@ function convert_string(jl_string)
 	return pointer(jl_string)
 end
 
-function convert_vector_to_nomadpoint(jl_vector)
-	size = length(jl_vector)
-	return icxx"""NOMAD::Double d;
-				NOMAD::Point nomadpoint($size,d);
+function convert_lower_bound(jl_lb,it)
+	dim = length(jl_lb)
+	return icxx"""NOMAD::Point lb ($dim);
 				$:(
-					for i=1:size
+					for i=1:dim
+						if it[i]!="C" && jl_lb[i]>-Inf
+							icxx"lb[int($i-1)]=$(jl_lb[i]);";
+						end;
+					end;
+					nothing
+				);
+				return lb;"""
+end
+
+function convert_upper_bound(jl_ub,it)
+	dim = length(jl_ub)
+	return icxx"""NOMAD::Point ub ($dim);
+				$:(
+					for i=1:dim
+						if it[i]!="C" && jl_ub[i]<Inf
+							icxx"ub[int($i-1)]=$(jl_ub[i]);";
+						end;
+					end;
+					nothing
+				);
+				return ub;"""
+end
+
+function convert_vector_to_nomadpoint(jl_vector)
+	dim = length(jl_vector)
+	return icxx"""NOMAD::Point nomadpoint($dim);
+				$:(
+					for i=1:dim
 						icxx"nomadpoint[int($i-1)]=$(jl_vector[i]);";
 					end;
 					nothing
@@ -309,11 +365,11 @@ function convert_output_types(ot,m)
 end
 
 
-function convert_signatures(sign)
+function convert_signatures(sign,c_param)
 	return icxx"""std::vector<NOMAD::Signature *> c_sign;
 	$:(
 		for s in sign
-			c_s=convert_signature(s)
+			c_s=convert_signature(s,c_param)
 			icxx"c_sign.push_back($c_s);";
 		end;
 		nothing
@@ -321,49 +377,44 @@ function convert_signatures(sign)
 	return c_sign;"""
 end
 
-function convert_signature(s)
+function convert_signature(s,c_param)
 
-	c_input_types=convert_input_types(s.input_types,length(s.input_types))
-	c_lower_bound=convert_vector_to_nomadpoint(s.lower_bound)
-	c_upper_bound=convert_vector_to_nomadpoint(s.upper_bound)
-	c_granularity=convert_vector_to_nomadpoint(s.granularity)::CnomadPoint
+	c_input_types=convert_input_types(s.input_types,s.dimension)
+	c_lower_bound=convert_lower_bound(s.lower_bound,s.input_types)
+	c_upper_bound=convert_upper_bound(s.upper_bound,s.input_types)
+	c_init_poll_size=generate_init_poll_size(s)
 
-	return icxx"""NOMAD::Display out ( std::cout );
-				  out.precision ( NOMAD::DISPLAY_PRECISION_STD );
-				  NOMAD::Parameters p ( out );
-				  p.set_DIMENSION ($(s.dimension));
-				  std::cout<<"HERE0"<<std::endl;
-				  NOMAD::Double mesh_update_basis = p.get_mesh_update_basis();
-				  std::cout<<"HERE1/2"<<std::endl;
-				  NOMAD::Double poll_update_basis = p.get_poll_update_basis();
-				  std::cout<<"HERE1"<<std::endl;
-				  int mesh_coarsening_exponent = p.get_mesh_coarsening_exponent();
-				  std::cout<<"HERE2"<<std::endl;
-				  int mesh_refining_exponent = p.get_mesh_refining_exponent();
-				  std::cout<<"HERE3"<<std::endl;
-				  std::set<NOMAD::Variable_Group*,NOMAD::VG_Comp> variable_groups = p.get_variable_groups();
-				  NOMAD::Signature * c_s = new NOMAD::Signature ( 	$(s.dimension),
-													   		$c_input_types,
-													   		$c_lower_bound,
-													   		$c_upper_bound,
-													   		p.get_mesh_type(),
-													   		p.get_anisotropic_mesh(),
-													   		p.get_anisotropy_factor(),
-													   		$c_granularity,
-													   		p.get_initial_poll_size(),
-													   		p.get_min_poll_size(),
-													   		p.get_min_mesh_size(),
-													   		mesh_update_basis,
-													   		poll_update_basis,
-													   		mesh_coarsening_exponent,
-													   		mesh_refining_exponent,
-													   		p.get_initial_mesh_index(),
-													   		p.get_scaling(),//
-													   		p.get_fixed_variables(),//
-													   		p.get_periodic_variables(),
-													   		variable_groups,
-													   		p.out()
-													   	);
+	return icxx"""NOMAD::Parameters * p = $c_param;
+					NOMAD::Signature * c_s = new NOMAD::Signature ( $(s.dimension),
+																  $c_input_types,
+																  $c_init_poll_size,
+																  $c_lower_bound,
+																  $c_upper_bound,
+																  p->get_direction_types(),
+																  p->get_sec_poll_dir_types(),
+																  p->get_int_poll_dir_types(),
+																  p->out()
+																);
+	                return c_s;"""
+end
 
-					return c_s;"""
+function generate_init_poll_size(s)
+	return icxx"""NOMAD::Point init_poll_size ( $(s.dimension) );
+				$:(
+					for i=1:s.dimension
+						if s.input_types[i]!="C"
+						  icxx"init_poll_size[int($i-1)]=1.0;";
+						elseif s.lower_bound[i]>-Inf && s.upper_bound[i]<Inf
+						  icxx"init_poll_size[int($i-1)]=$(0.1*(s.upper_bound[i]-s.lower_bound[i]));";
+						elseif s.lower_bound[i]>-Inf
+						  icxx"init_poll_size[int($i-1)]=$(0.1*abs(s.lower_bound[i]));";
+						elseif s.upper_bound[i]<Inf
+						  icxx"init_poll_size[int($i-1)]=$(0.1*abs(s.upper_bound[i]));";
+						else
+						  icxx"init_poll_size[int($i-1)]=1.0;";
+						end;
+					end;
+					nothing
+				);
+				return init_poll_size;"""
 end
