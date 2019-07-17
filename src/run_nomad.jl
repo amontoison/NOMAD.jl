@@ -402,8 +402,8 @@ function generate_init_poll_size(s)
 	return icxx"""NOMAD::Point init_poll_size ( $(s.dimension) );
 				$:(
 					for i=1:s.dimension
-						if s.input_types[i]!="C"
-						  icxx"init_poll_size[int($i-1)]=1.0;";
+						if s.input_types[i]=="C"
+					  	  icxx"init_poll_size[int($i-1)]=1.0;";
 						elseif s.lower_bound[i]>-Inf && s.upper_bound[i]<Inf
 						  icxx"init_poll_size[int($i-1)]=$(0.1*(s.upper_bound[i]-s.lower_bound[i]));";
 						elseif s.lower_bound[i]>-Inf

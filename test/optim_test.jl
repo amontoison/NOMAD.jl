@@ -89,7 +89,9 @@ function extpoll(x)
 	else
 		p1=[0,x[2]+0.3,x[3]+0.3]
 		s1_i=1
-		return ([p1],[s1_i])
+		p2=[0,x[2],x[3],x[3]]
+		s2_i=0
+		return ([p1,p2],[s1_i,s2_i])
 	end
 end
 

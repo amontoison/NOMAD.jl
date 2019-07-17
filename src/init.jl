@@ -97,6 +97,12 @@ function create_Evaluator_class()
 				bool                & count_eval   ) const
 			{
 
+			std::cout<<"calling evalx at point :"<<std::endl;
+
+			NOMAD::Signature * s = x.get_signature();
+			std::cout<<s->get_n()<<std::endl;
+			const std::vector<NOMAD::bb_input_type> & it = s->get_input_types();
+
 			int n = x.get_n();
 
 			double c_x[n+2];
@@ -104,15 +110,20 @@ function create_Evaluator_class()
 			c_x[0] = n;
 
 			for (int i = 1; i <= n; ++i) {
+				std::cout<<it[i-1]<<std::endl;
 				c_x[i]=x[i-1].value();
+				std::cout<<x[i-1].value()<<std::endl;
 			} //first converting our NOMAD::Eval_Point to a double[]
 
 			c_x[n+1] = (x.get_eval_type()==NOMAD::SGTE)?1.0:0.0;
 
 			double * c_bb_outputs = evalwrap(c_x);
 
+			std::cout<<"output :"<<std::endl;
+
 			for (int i = 0; i < m; ++i) {
 				NOMAD::Double nomad_bb_output = c_bb_outputs[i];
+				std::cout<<nomad_bb_output.value()<<std::endl;
 		    	x.set_bb_output  ( i , nomad_bb_output  );
 			} //converting C-double returned by evalwrap in NOMAD::Double that
 			//are inserted in x as black box outputs
@@ -135,8 +146,7 @@ function create_Evaluator_class()
 			//the call to eval_x has succeded
 		}
 
-		};
-	"""
+		};"""
 end
 
 function create_Extended_Poll_class()
@@ -170,6 +180,9 @@ function create_Extended_Poll_class()
 			// construct the extended poll points:
 			void construct_extended_points ( const NOMAD::Eval_Point & x ) {
 
+				std::cout<<"number of signatures"<<std::endl;
+				std::cout<<s.size()<<std::endl;
+
 				int n = x.get_n();
 				double c_x[n+1];
 
@@ -189,16 +202,21 @@ function create_Extended_Poll_class()
 				int index = 1;
 
 				for (int i = 0; i < num_pp; ++i) {
+					std::cout<<"extended poll point :"<<std::endl;
 					int sign_index = static_cast<int> ( c_poll_points[index] );
 					NOMAD::Signature * pp_sign = s[sign_index];
 					int npp = pp_sign->get_n(); //dimension of poll point
 					NOMAD::Point pp (npp);
 					for (int j = 0; j < npp; ++j) {
 						pp[j] = c_poll_points[index+1+j];
+						std::cout<<pp[j].value()<<std::endl;
 					}
 					add_extended_poll_point ( pp , *pp_sign );
 					index += npp+1;
 				} //Extracting extended poll points from double[] returned by extendwrap
+
+				std::cout<<"/////////////////////////////extended poll points"<<std::endl;
+
 
 
 			}
@@ -271,6 +289,8 @@ function create_cxx_runner()
 		    // algorithm creation and execution
 
 			mads.run();
+
+			std::cout<<"end mads"<<std::endl;
 
 			//saving results
 			const NOMAD::Eval_Point* bf_ptr = mads.get_best_feasible();
