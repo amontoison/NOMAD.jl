@@ -126,6 +126,7 @@ param6.display_all_eval=true
 param6.stop_if_feasible=true
 
 param7=nomadParameters([1,10,10,10],["OBJ"]) #first coordinate choose the objective function
+param7.max_bb_eval = 1000
 param7.input_types=["C","R","R","R"]
 sign1=nomadSignature(["C","R","R"]) #dimension can be modified
 push!(param7.signatures,sign1)

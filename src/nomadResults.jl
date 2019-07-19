@@ -123,7 +123,7 @@ mutable struct nomadResults
                 data = split(stat_lines[index],"|",keepempty=false)
                 inter_bbe[index] = parse(Int64,data[1])
                 x=split(data[2]," ",keepempty=false)
-                for i=1:param.dimension
+                for i=1:length(x)
                     inter_states[index,i]=parse(Float64,x[i])
                     if param.input_types[i] in ["I","B"]
                         inter_states[index,i]=convert(Int64,inter_states[index,i])

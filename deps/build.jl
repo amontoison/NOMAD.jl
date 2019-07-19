@@ -16,9 +16,12 @@ ENV["NOMAD_HOME"] = nomad_path
 
 cd(nomad_path)
 
+cp(joinpath(builddir,"downloads","patches","Extended_Poll.cpp"),joinpath(nomad_path,"src","Extended_Poll.cpp"),force=true)
+cp(joinpath(builddir,"downloads","patches","NelderMead_Search.cpp"),joinpath(nomad_path,"src","NelderMead_Search.cpp"),force=true)
+
 run(`./configure`)
 
-cp(joinpath(builddir,"downloads","Makefile"),joinpath(nomad_path,"src","Makefile"),force=true)
+cp(joinpath(builddir,"downloads","patches","Makefile"),joinpath(nomad_path,"src","Makefile"),force=true)
 
 run(`make`)
 
