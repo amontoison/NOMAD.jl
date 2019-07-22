@@ -69,9 +69,8 @@ function create_Evaluator_class()
 	each instance of the class Wrap_Evaluator is related
 	to a given julia evaluator.
 
-	the attribute n is the dimension of the problem and m
-	is the number of outputs (objective functions and
-	constraints).
+	the attribute m is the number of outputs
+	(objective functions and constraints).
 	=#
 
     cxx"""
@@ -97,9 +96,6 @@ function create_Evaluator_class()
 				bool                & count_eval   ) const
 			{
 
-			NOMAD::Signature * s = x.get_signature();
-			const std::vector<NOMAD::bb_input_type> & it = s->get_input_types();
-
 			int n = x.get_n();
 
 			double c_x[n+2];
@@ -108,17 +104,20 @@ function create_Evaluator_class()
 
 			for (int i = 1; i <= n; ++i) {
 				c_x[i]=x[i-1].value();
-			} //first converting our NOMAD::Eval_Point to a double[]
+			} //converting our NOMAD::Eval_Point to a double[]
+			//first coordinate is dimension, last is equal to 1 if the surrogate needs to be called.
 
 			c_x[n+1] = (x.get_eval_type()==NOMAD::SGTE)?1.0:0.0;
 
 			double * c_bb_outputs = evalwrap(c_x);
+			//table containing result of black box evaluation. two last
+			//coordinates are booleans success and count_eval.
 
 			for (int i = 0; i < m; ++i) {
 				NOMAD::Double nomad_bb_output = c_bb_outputs[i];
 		    	x.set_bb_output  ( i , nomad_bb_output  );
-			} //converting C-double returned by evalwrap in NOMAD::Double that
-			//are inserted in x as black box outputs
+			} //converting C-double returned by evalwrap in NOMAD::Double and
+			//inserting them in x as black box outputs
 
 			bool success = false;
 			if (c_bb_outputs[m]==1.0) {
@@ -129,29 +128,51 @@ function create_Evaluator_class()
 			if (c_bb_outputs[m+1]==1.0) {
 				count_eval=true;
 			}
-			//count_eval returned by evalwrap is actually a double and needs
-			//to be converted to a boolean
+			//success and count_eval returned by evalwrap are actually doubles and need
+			//to be converted to booleans
 
 			delete[] c_bb_outputs;
 
 		    return success;
-			//the call to eval_x has succeded
 		}
 
 		};"""
 end
 
+"""
+
+	create_Extended_Poll_class()
+
+Create a Cxx-class "Wrap_Extended_Poll" that inherits from
+NOMAD::Extendeed_Poll.
+
+"""
 function create_Extended_Poll_class()
+
+	#=
+	The method construct_extended_points is called by NOMAD to
+	provide extended poll points for evaluation. The first
+	attribute extpollwrap of the class is a pointer to the julia
+	function that wraps the extended poll provided by the user
+	and makes it interpretable by C++.
+	This wrapper is called by the method construct_extended_points.
+	This way,each instance of the class Wrap_Extended_Poll is
+	related to a given julia extended poll.
+
+	the attribute signatures is a vector containing the signatures
+	provided by the user.
+	=#
 
 	cxx"""class Wrap_Extended_Poll : public NOMAD::Extended_Poll
 		{
 
 		private:
 
+			double * (*extpollwrap)(double * input);
+
 			// signatures
 			std::vector<NOMAD::Signature *> s;
 
-			double * (*extpollwrap)(double * input);
 
 		public:
 
@@ -180,10 +201,11 @@ function create_Extended_Poll_class()
 				for (int i = 1; i <= n; ++i) {
 					c_x[i]=x[i-1].value();
 				} //first converting our NOMAD::Eval_Point to a double[]
+				//first coordinate is the dimension.
 
 				double * c_poll_points = extpollwrap(c_x);
-				//first coordinate is the number of extended poll points
-				//then extended poll points are all concatenated in this
+				//first coordinate of c_poll_points is the number of extended poll points.
+				//Then, extended poll points are all concatenated in this
 				//double[], each one preceded by the index of its signature.
 
 				int num_pp = c_poll_points[0]; //number of extended poll points
@@ -191,8 +213,8 @@ function create_Extended_Poll_class()
 				int index = 1;
 
 				for (int i = 0; i < num_pp; ++i) {
-					int sign_index = static_cast<int> ( c_poll_points[index] );
-					NOMAD::Signature * pp_sign = s[sign_index];
+					int sign_index = static_cast<int> ( c_poll_points[index] ); //read signature index
+					NOMAD::Signature * pp_sign = s[sign_index]; //load signature in question
 					int npp = pp_sign->get_n(); //dimension of poll point
 					NOMAD::Point pp (npp);
 					for (int j = 0; j < npp; ++j) {
@@ -200,7 +222,7 @@ function create_Extended_Poll_class()
 					}
 					add_extended_poll_point ( pp , *pp_sign );
 					index += npp+1;
-				} //Extracting extended poll points from double[] returned by extendwrap
+				} //Extracting extended poll points from double[] returned by extpollwrap
 
 			}
 
@@ -218,16 +240,15 @@ optimization process.
 function create_cxx_runner()
 
 	#=
-	This C++ function takes as arguments the settings of the
-	optimization (dimension, output types, display options,
-	bounds, etc.) along with a void pointer to the julia
-	function that wraps the evaluator provided by the user.
-	cpp_main first create an instance of the C++ class
-	Paramaters and feed it with the optimization settings.
-	Then a Wrap_Evaluator is constructed from this Parameters
-	instance and from the pointer to the evaluator wrapper.
-	Mads is then run, taking as arguments the Wrap_Evaluator
-	and Parameters instances.
+	This C++ function takes as arguments parameters provided by the user
+	along with a void pointer to the julia function that wraps the
+	evaluator provided by the user (there is another pointer to the
+	extended poll if categorical variables are used). cpp_runner first
+	converts the pointer to eval(x) wrapper into an appropriate type and then
+	constructs an instance of the class Wrap_Evaluator (proceeds the
+	same way for Wrap_Extended_Poll if categorical variables are used).
+	Afterwards, a MADS instance is run, taking as arguments the Wrap_Evaluator
+	and Parameters instances. At the end, results are extracted from the MADS instance.
 	=#
 
     cxx"""
@@ -237,37 +258,33 @@ function create_cxx_runner()
 
 		Cresult cpp_runner(NOMAD::Parameters * p,
 					NOMAD::Display out,
-					int m,
-					void* f_ptr,
-					void* ex_ptr,
+					int m, //dimension of the output
+					void* f_ptr, //pointer to eval(x) wrapper
+					void* ex_ptr, //pointer to extpoll(x) wrapper
 					bool has_stat_avg_,
 					bool has_stat_sum_,
 					bool has_sgte_,
 					bool has_extpoll_,
 					std::vector<NOMAD::Signature *> signatures
-					) { //le C-main prend en entrée les attributs de l'instance julia parameters
-
-
-			//Attention l'utilisation des std::string peut entrainer une erreur selon la version du compilateur qui a été utilisé pour générer les librairies NOMAD
+					) {
 
 		  Cresult res;
 
 		  try {
 
-			//conversion from void pointer to appropriate pointer
 			typedef double * (*fptr)(double * input);
+
+			//conversion from void pointer to appropriate type (extpoll pointer is empty without categorical variables)
 			fptr f_fun_ptr = reinterpret_cast<fptr>(f_ptr);
+			fptr ex_fun_ptr = reinterpret_cast<fptr>(ex_ptr);
 
 		    // custom evaluator creation
 		    Wrap_Evaluator ev   ( *p , f_fun_ptr, m, has_sgte_);
 
-			Wrap_Extended_Poll * wrap_ep_ptr=NULL;
-
-			fptr ex_fun_ptr = reinterpret_cast<fptr>(ex_ptr);
+			// custom extended poll creation (used only if there are categorical variables)
 			Wrap_Extended_Poll ep ( *p , ex_fun_ptr, signatures);
-			wrap_ep_ptr = &ep;
 
-			NOMAD::Mads mads ( *p , &ev , wrap_ep_ptr , NULL, NULL );
+			NOMAD::Mads mads ( *p , &ev , &ep , NULL, NULL );
 
 		    // algorithm creation and execution
 

@@ -7,8 +7,6 @@ function test_results_consistency(res::nomadResults,param::nomadParameters,eval:
 	(success,count_eval,bbo_bf) = eval(res.best_feasible)
 	@test bbo_bf ≈ res.bbo_best_feasible
 
-
-
 	if res.has_infeasible
 		@test length(res.best_infeasible)==param.dimension
 		@test right_input_type(res.best_infeasible,param.input_types)

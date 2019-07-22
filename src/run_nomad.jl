@@ -58,23 +58,26 @@ bounds, etc.).
 
 	result = nomad(eval,param)
 
+# **Optional arguments** :
+
 """
 function nomad(eval::Function,param_::nomadParameters;surrogate=nothing,extended_poll=nothing)
 
 	#=
-	This function first wraps eval with a julia function eval_wrap
-	that takes a C-double[] as argument and returns a C-double[].
-	Then it converts all param attributes into C++ variables and
-	calls the C++ function cpp_runner previously defined by
+	This function first wraps eval(x) with a julia function eval_wrap
+	that takes a C-double[] as argument and returns a C-double[]
+	(Also wraps extended poll if there are categorical variables).
+	Then it converts julia nomadParameters into a C++ NOMAD::Parameters
+	and calls the C++ function cpp_runner previously defined by
 	init.
 	=#
-
-	param=deepcopy(param_)
 
 	has_sgte = !isnothing(surrogate)
 	has_extpoll = !isnothing(extended_poll)
 
-	check_eval_param(eval,param,surrogate) #check consistency of nomadParameters with problem
+	check_eval_param(eval,param_,surrogate) #check consistency of nomadParameters with problem
+
+	param=deepcopy(param_)
 
 	m=length(param.output_types)::Int64
 

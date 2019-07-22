@@ -126,14 +126,16 @@ param6.display_all_eval=true
 param6.stop_if_feasible=true
 
 param7=nomadParameters([1,10,10,10],["OBJ"]) #first coordinate choose the objective function
-param7.max_bb_eval = 1000
+param7.max_bb_eval = 200
 param7.input_types=["C","R","R","R"]
 sign1=nomadSignature(["C","R","R"]) #dimension can be modified
 push!(param7.signatures,sign1)
 
 #classic run
-#=result1 = nomad(eval1,param1)
+println(param1.x0)
+result1 = nomad(eval1,param1)
 @test result1.success
+println(param1.x0)
 test_results_consistency(result1,param1,eval1)
 @test result1.best_feasible ≈ [1.0, 3.0]
 disp(result1)
@@ -166,7 +168,9 @@ disp(result5)
 result6 = nomad(eval2,param6)
 @test result6.success
 test_results_consistency(result6,param6,eval2)
-disp(result6)=#
+disp(result6)
 
 #categorical variables
 result7 = nomad(eval6,param7;extended_poll=extpoll)
+@test result7.success
+disp(result7)
