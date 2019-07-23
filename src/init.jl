@@ -53,7 +53,7 @@ end
 
 	create_Evaluator_class()
 
-Create a Cxx-class "Wrap_Evaluator" that inherits from
+Create a C++-class "Wrap_Evaluator" that inherits from
 NOMAD::Evaluator.
 
 """
@@ -143,8 +143,9 @@ end
 
 	create_Extended_Poll_class()
 
-Create a Cxx-class "Wrap_Extended_Poll" that inherits from
-NOMAD::Extendeed_Poll.
+Create a C++-class "Wrap_Extended_Poll" that inherits from
+NOMAD::Extendeed_Poll. This class will only be used for problems
+with categorical variables.
 
 """
 function create_Extended_Poll_class()
@@ -233,22 +234,23 @@ end
 """
 	create_cxx_runner()
 
-Create a C++ function cpp_main that launches NOMAD
+Create a C++ function cpp_runner that launches NOMAD
 optimization process.
 
 """
 function create_cxx_runner()
 
 	#=
-	This C++ function takes as arguments parameters provided by the user
-	along with a void pointer to the julia function that wraps the
+	This C++ function takes as arguments a C-instance NOMAD::Parameters
+	along with a void pointer to the julia function wrapping the
 	evaluator provided by the user (there is another pointer to the
-	extended poll if categorical variables are used). cpp_runner first
-	converts the pointer to eval(x) wrapper into an appropriate type and then
+	extended poll in case categorical variables are used). cpp_runner first
+	converts the pointer to the appropriate type and then
 	constructs an instance of the class Wrap_Evaluator (proceeds the
 	same way for Wrap_Extended_Poll if categorical variables are used).
 	Afterwards, a MADS instance is run, taking as arguments the Wrap_Evaluator
-	and Parameters instances. At the end, results are extracted from the MADS instance.
+	and the NOMAD::Parameters instance. At the end, results are extracted
+	from the MADS instance.
 	=#
 
     cxx"""
@@ -260,7 +262,7 @@ function create_cxx_runner()
 					NOMAD::Display out,
 					int m, //dimension of the output
 					void* f_ptr, //pointer to eval(x) wrapper
-					void* ex_ptr, //pointer to extpoll(x) wrapper
+					void* ex_ptr, //pointer to extpoll(x) wrapper (empty if no categorical variable is used)
 					bool has_stat_avg_,
 					bool has_stat_sum_,
 					bool has_sgte_,
@@ -274,7 +276,7 @@ function create_cxx_runner()
 
 			typedef double * (*fptr)(double * input);
 
-			//conversion from void pointer to appropriate type (extpoll pointer is empty without categorical variables)
+			//conversion from void pointer to appropriate type (ex_ptr is empty without categorical variables)
 			fptr f_fun_ptr = reinterpret_cast<fptr>(f_ptr);
 			fptr ex_fun_ptr = reinterpret_cast<fptr>(ex_ptr);
 
