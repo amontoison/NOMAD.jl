@@ -10,7 +10,7 @@ pages = ["Home" => "index.md",
            "Parameters" => "nomadParameters.md",
            "Run Optimization" => "run_nomad.md",
            "Results" => "nomadResults.md",
-           "Surrogates" => "surrogates.md"
+           "Surrogates" => "surrogates.md",
            "Categorical variables" => "categorical_variables.md"
           ]
 )
