@@ -7,7 +7,6 @@ using Cxx
 
 export nomad, nomadParameters, disp, nomadResults, nomadSignature
 
-include("typedef.jl")
 include("init.jl")
 include("nomadSignature.jl")
 include("nomadParameters.jl")

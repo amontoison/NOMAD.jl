@@ -132,10 +132,8 @@ sign1=nomadSignature(["C","R","R"]) #dimension can be modified
 push!(param7.signatures,sign1)
 
 #classic run
-println(param1.x0)
 result1 = nomad(eval1,param1)
 @test result1.success
-println(param1.x0)
 test_results_consistency(result1,param1,eval1)
 @test result1.best_feasible ≈ [1.0, 3.0]
 disp(result1)

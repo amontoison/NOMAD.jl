@@ -71,9 +71,9 @@ function nomad(eval::Function,param_::nomadParameters;surrogate=nothing,extended
 	=#
 
 	has_sgte = !isnothing(surrogate)
-	has_extpoll = !isnothing(extended_poll)
+	has_extpoll = (!isnothing(extended_poll)) && ("C" in param_.input_types)
 
-	check_eval_param(eval,param_,surrogate) #check consistency of nomadParameters with problem
+	check_eval_param(eval,param_,surrogate,extended_poll) #check consistency of nomadParameters with problem
 
 	param=deepcopy(param_)
 
@@ -119,6 +119,9 @@ function nomad(eval::Function,param_::nomadParameters;surrogate=nothing,extended
 	#void pointer toward eval_wrap
 	evalwrap_void_ptr = evalwrap_void_ptr_struct.ptr::Ptr{Nothing}
 
+
+
+
 	#If categorical variables are used
 	if has_extpoll
 
@@ -159,7 +162,7 @@ function nomad(eval::Function,param_::nomadParameters;surrogate=nothing,extended
 					0<=s_i<=max_signature_index || error("Extended poll error : a signature index returned by extpoll(x) is wrong")
 					icxx"c_output[$index]=$(signature_ind[i]);";
 					for j=1:sizes_pp[i]
-				    	icxx"c_output[$(index+j)]=$(extpoll_points[i][j]);";
+				    	icxx"c_output[$(index+j)]=$(Float64(extpoll_points[i][j]));";
 					end;
 					index+=sizes_pp[i]+1;
 				end;
@@ -181,6 +184,9 @@ function nomad(eval::Function,param_::nomadParameters;surrogate=nothing,extended
 		extpollwrap_void_ptr=icxx"void * ptr; return ptr;"
 
 	end
+
+
+
 
 	#Initializing mads and setting output display flow
 	c_out = icxx"""int argc;

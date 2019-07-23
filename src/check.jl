@@ -1,11 +1,11 @@
 """
 
-	check_eval_param(eval,param)
+	check_eval_param(eval,param,sgte,extpoll)
 
-Check consistency of eval(x) and nomadParameters given as arguments for runopt
+Check consistency of eval(x), sgte(x), extpoll(x) and nomadParameters given as arguments for nomad()
 
 """
-function check_eval_param(eval::Function,param::nomadParameters,sgte)
+function check_eval_param(eval::Function,param::nomadParameters,sgte,extpoll)
 
 	check_x0(param)
 	check_everything_set(param)
@@ -19,9 +19,19 @@ function check_eval_param(eval::Function,param::nomadParameters,sgte)
 		try
 			sgte::Function
 		catch
-			error("NOMAD.jl error : wrong input on nomad(), sgte needs to be a function")
+			error("NOMAD.jl error : wrong input on nomad(), surrogate needs to be a function")
 		end
 		check_sgte(sgte,eval,param)
+	end
+	if !isnothing(extpoll)
+		if !("C" in param.input_types)
+			@warn "extended poll is provided but no categorical variable is set, it will be ignored."
+		end
+		try
+			extpoll::Function
+		catch
+			error("NOMAD.jl error : wrong input on nomad(), extended_poll needs to be a function")
+		end
 	end
 	check_signatures(param)
 
@@ -115,7 +125,12 @@ function check_input_types(p)
 end
 
 function check_granularity(p)
+	warn_for_gran_unuse = false
 	length(p.granularity)==p.dimension || error("NOMAD.jl error : wrong parameters, nomadParameters.granularity does not have the same dimension as the initial point")
+	if ("C" in p.input_types) && (sum(p.granularity.==0)<p.dimension)
+		@warn "granularity is not available when using categorical variables"
+		p.granularity = zeros(Float64,dimension)
+	end
 	for i=1:p.dimension
 		if p.input_types[i]=="R"
 			p.granularity[i]>=0 || error("NOMAD.jl error : wrong parameters, $(i)th coordinate of nomadParameters.granularity is negative")
@@ -194,8 +209,11 @@ function check_sgte(sg,ev,p)
 	end
 end
 
-function check_signatures(param)
-	for s in param.signatures
+function check_signatures(p)
+	if !("C" in p.input_types) && (length(p.signatures)>0)
+		@warn "Signatures will not be used because no categorical variable has been set in input types"
+	end
+	for s in p.signatures
 		if isempty(s.lower_bound)
 			s.lower_bound=fill(-Inf,s.dimension)
 		end

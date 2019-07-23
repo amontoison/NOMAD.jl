@@ -96,7 +96,7 @@ maximum wall-clock time (in seconds). if equal
 to zero, no maximum is taken into account.
 `0` by default.
 
-- `output_types::Vector{String}` :
+- `input_types::Vector{String}` :
 A vector containing *String* objects that define the
 types of inputs to be given to eval (the order is important) :
 
@@ -105,6 +105,7 @@ String  | Input type |
 `"R"`   | Real/Continuous |
 `"B"`   | Binary |
 `"I"`   | Integer |
+`"C"`   | Categorical |
 
 all R by default.
 
@@ -147,6 +148,22 @@ NOMAD terminates if STAT_SUM reaches this value.
 random seed used by NOMAD. If set to -1, the seed of each run will be
 different.
 `0` by default.
+
+- `signatures::Vector{nomadSignature}` :
+additional signatures of extended poll points. (see Categorical variables section
+in documentation for more details).
+empty by default.
+
+- `poll_trigger::Number` :
+trigger for launching an extended poll descent from an extended poll point
+(see Categorical variables section in documentation for more details).
+10 by default.
+
+- `relative_trigger::Float` :
+If set to true, the value of `poll_trigger` is considered as relative
+to the current best point (see Categorical variables section in documentation
+for more details).
+`false` by default.
 
 """
 mutable struct nomadParameters
