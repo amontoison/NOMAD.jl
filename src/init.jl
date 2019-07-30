@@ -100,14 +100,13 @@ function create_Evaluator_class()
 
 			double c_x[n+2];
 
-			c_x[0] = n;
+			c_x[0] = n+1; //first coordinate indicates dimension (taking into account final surrogate boolean)
 
-			for (int i = 1; i <= n; ++i) {
-				c_x[i]=x[i-1].value();
-			} //converting our NOMAD::Eval_Point to a double[]
-			//first coordinate is dimension, last is equal to 1 if the surrogate needs to be called.
+			for (int i = 0; i < n; ++i) {
+				c_x[i+1]=x[i].value();
+			} //next coordinates contain x
 
-			c_x[n+1] = (x.get_eval_type()==NOMAD::SGTE)?1.0:0.0;
+			c_x[n+2] = (x.get_eval_type()==NOMAD::SGTE)?1.0:0.0; //last coordinate equal to 1 if call to the surrogate
 
 			double * c_bb_outputs = evalwrap(c_x);
 			//table containing result of black box evaluation. two last
@@ -169,7 +168,7 @@ function create_Extended_Poll_class()
 
 		private:
 
-			double * (*extpollwrap)(double * input);
+			double * (*evalwrap)(double * input);
 
 			// signatures
 			std::vector<NOMAD::Signature *> s;
@@ -178,9 +177,9 @@ function create_Extended_Poll_class()
 		public:
 
 			// constructor:
-			Wrap_Extended_Poll ( NOMAD::Parameters & p,  double * (*g)(double * input) , std::vector<NOMAD::Signature *> sign) :
+			Wrap_Extended_Poll ( NOMAD::Parameters & p,  double * (*f)(double * input) , std::vector<NOMAD::Signature *> sign) :
 
-			NOMAD::Extended_Poll ( p ) {s=sign;extpollwrap=g;}
+			NOMAD::Extended_Poll ( p ) {s=sign;evalwrap=f;}
 
 			// destructor:
 			~Wrap_Extended_Poll ( void ) {
@@ -195,16 +194,16 @@ function create_Extended_Poll_class()
 			void construct_extended_points ( const NOMAD::Eval_Point & x ) {
 
 				int n = x.get_n();
+
 				double c_x[n+1];
 
-				c_x[0] = n;
+				c_x[0] = -n; //negative first coordinate indicates that extended poll points are needed from evalwrap
 
-				for (int i = 1; i <= n; ++i) {
-					c_x[i]=x[i-1].value();
-				} //first converting our NOMAD::Eval_Point to a double[]
-				//first coordinate is the dimension.
+				for (int i = 0; i < n; ++i) {
+					c_x[i+1]=x[i].value();
+				}
 
-				double * c_poll_points = extpollwrap(c_x);
+				double * c_poll_points = evalwrap(c_x);
 				//first coordinate of c_poll_points is the number of extended poll points.
 				//Then, extended poll points are all concatenated in this
 				//double[], each one preceded by the index of its signature.
@@ -261,8 +260,7 @@ function create_cxx_runner()
 		Cresult cpp_runner(NOMAD::Parameters * p,
 					NOMAD::Display out,
 					int m, //dimension of the output
-					void* f_ptr, //pointer to eval(x) wrapper
-					void* ex_ptr, //pointer to extpoll(x) wrapper (empty if no categorical variable is used)
+					void* f_ptr, //pointer to julia evaluator wrapper
 					bool has_stat_avg_,
 					bool has_stat_sum_,
 					bool has_sgte_,
@@ -278,13 +276,12 @@ function create_cxx_runner()
 
 			//conversion from void pointer to appropriate type (ex_ptr is empty without categorical variables)
 			fptr f_fun_ptr = reinterpret_cast<fptr>(f_ptr);
-			fptr ex_fun_ptr = reinterpret_cast<fptr>(ex_ptr);
 
 		    // custom evaluator creation
 		    Wrap_Evaluator ev   ( *p , f_fun_ptr, m, has_sgte_);
 
 			// custom extended poll creation (used only if there are categorical variables)
-			Wrap_Extended_Poll ep ( *p , ex_fun_ptr, signatures);
+			Wrap_Extended_Poll ep ( *p , f_fun_ptr, signatures);
 
 			NOMAD::Mads mads ( *p , &ev , &ep , NULL, NULL );
 
