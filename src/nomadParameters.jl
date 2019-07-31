@@ -196,11 +196,13 @@ mutable struct nomadParameters
     poll_trigger::Float64
     relative_trigger::Bool
 
-    function nomadParameters(inputTypes::Vector{String},outputTypes::Vector{String})
-        x0 = []
-        dimension = length(inputTypes)
-        input_types=inputTypes
-        output_types=outputTypes
+    function nomadParameters(x0::AbstractVector,output_types::Vector{String})
+        if typeof(x0[1])<:AbstractVector
+            dimension=length(x0[1])
+        else
+            dimension=length(x0)
+        end
+        input_types=[]
         lower_bound=[]
         upper_bound=[]
         display_all_eval=false
@@ -227,7 +229,8 @@ mutable struct nomadParameters
 
     #copy constructor
     function nomadParameters(p::nomadParameters)
-        new(p.dimension,copy(p.x0),copy(p.input_types),copy(p.output_types),copy(p.lower_bound),copy(p.upper_bound),
+<<<<<<< HEAD
+        new(p.dimension,deepcopy(p.x0),copy(p.input_types),copy(p.output_types),copy(p.lower_bound),copy(p.upper_bound),
         p.display_all_eval, p.display_stats,p.display_degree,p.max_bb_eval,p.max_time,p.LH_init,p.LH_iter,p.opportunistic_LH,
         p.sgte_cost, copy(p.granularity),p.stop_if_feasible,p.VNS_search,p.stat_sum_target,p.seed,copy(p.signatures),
         p.poll_trigger,p.relative_trigger)

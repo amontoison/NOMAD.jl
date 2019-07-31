@@ -211,8 +211,13 @@ function convert_parameter(param,m,has_sgte,has_extpoll,out)
 	c_output_types=convert_output_types(param.output_types,m)
 	c_display_stats=convert_string(param.display_stats)
 	c_x0=convert_x0_to_nomadpoints_list(param.x0)
+<<<<<<< HEAD
 	c_lower_bound=convert_lower_bound(param.lower_bound,param.input_types)
 	c_upper_bound=convert_upper_bound(param.upper_bound,param.input_types)
+=======
+	c_lower_bound=convert_vector_to_nomadpoint(param.lower_bound)
+	c_upper_bound=convert_vector_to_nomadpoint(param.upper_bound)
+>>>>>>> master
 	c_granularity=convert_vector_to_nomadpoint(param.granularity)
 
 	return icxx"""NOMAD::Parameters * p = new NOMAD::Parameters( $out );
