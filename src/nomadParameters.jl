@@ -229,7 +229,6 @@ mutable struct nomadParameters
 
     #copy constructor
     function nomadParameters(p::nomadParameters)
-<<<<<<< HEAD
         new(p.dimension,deepcopy(p.x0),copy(p.input_types),copy(p.output_types),copy(p.lower_bound),copy(p.upper_bound),
         p.display_all_eval, p.display_stats,p.display_degree,p.max_bb_eval,p.max_time,p.LH_init,p.LH_iter,p.opportunistic_LH,
         p.sgte_cost, copy(p.granularity),p.stop_if_feasible,p.VNS_search,p.stat_sum_target,p.seed,copy(p.signatures),

@@ -60,7 +60,6 @@ function eval5(x)
 	return (success,count_eval,bb_outputs)
 end
 
-<<<<<<< HEAD
 function eval6(x)
 	x[2:end].-=1
 	if x[1]==1
@@ -96,11 +95,7 @@ function extpoll(x)
 	end
 end
 
-param1=nomadParameters(["R","R"],["OBJ"])
-param1.x0 = [5,5]
-=======
 param1=nomadParameters([5,5],["OBJ"])
->>>>>>> master
 param1.max_bb_eval=100
 
 param2=nomadParameters([5,5],["OBJ","PB"])
@@ -128,9 +123,9 @@ param6=nomadParameters([[-14,70],[1,2]],["OBJ","PB"])
 param6.display_all_eval=true
 param6.stop_if_feasible=true
 
-param7=nomadParameters(["C","R","R","R"],["OBJ"]) #first coordinate choose the objective function
+param7=nomadParameters([1,10,10,10],["OBJ"]) #first coordinate choose the objective function
 param7.max_bb_eval = 200
-param7.x0=[1,10,10,10]
+param7.input_types=["C","R","R","R"]
 sign1=nomadSignature(["C","R","R"]) #dimension can be modified
 push!(param7.signatures,sign1)
 
