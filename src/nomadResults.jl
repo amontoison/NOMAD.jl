@@ -110,15 +110,15 @@ mutable struct nomadResults
         success=icxx"return ($c_res).success;"
 
         seed=icxx"return ($c_res).seed;"
-        rd_stats = open("temp." * string(seed) * ".txt")
-        stat_lines = readlines(rd_stats)
-        close(rd_stats)
-        rm("temp." * string(seed) * ".txt")
-        k = length(stat_lines)
-        inter_bbe = Vector{Int64}(undef,k)
-        inter_states = Matrix{Float64}(undef,k,param.dimension)
-        inter_bbo = Matrix{Float64}(undef,k,length(param.output_types))
         try
+            rd_stats = open("temp." * string(seed) * ".txt")
+            stat_lines = readlines(rd_stats)
+            close(rd_stats)
+            rm("temp." * string(seed) * ".txt")
+            k = length(stat_lines)
+            inter_bbe = Vector{Int64}(undef,k)
+            inter_states = Matrix{Float64}(undef,k,param.dimension)
+            inter_bbo = Matrix{Float64}(undef,k,length(param.output_types))
             for index = 1:k
                 data = split(stat_lines[index],"|",keepempty=false)
                 inter_bbe[index] = parse(Int64,data[1])
