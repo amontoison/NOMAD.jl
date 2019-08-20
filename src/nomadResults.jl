@@ -110,7 +110,7 @@ mutable struct nomadResults
         success=icxx"return ($c_res).success;"
 
         seed=icxx"return ($c_res).seed;"
-        try
+        (inter_bbe,inter_states,inter_bbo) = try
             rd_stats = open("temp." * string(seed) * ".txt")
             stat_lines = readlines(rd_stats)
             close(rd_stats)
@@ -135,6 +135,7 @@ mutable struct nomadResults
                 end
                 index += 1
             end
+            (inter_bbe,inter_states,inter_bbo)
         catch
             success=false
             @error("NOMAD.jl error : No solution found")

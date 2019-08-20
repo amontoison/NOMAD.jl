@@ -100,7 +100,7 @@ function create_Evaluator_class()
 
 			double c_x[n+2];
 
-			c_x[0] = n+1; //first coordinate indicates dimension (taking into account final surrogate boolean)
+			c_x[0] = n; //first coordinate indicates dimension 
 
 			for (int i = 0; i < n; ++i) {
 				c_x[i+1]=x[i].value();
