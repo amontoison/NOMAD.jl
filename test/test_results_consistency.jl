@@ -13,6 +13,7 @@ function test_results_consistency(res::nomadResults,param::nomadParameters,eval:
 	@test right_granularity(res.best_feasible,param.granularity)
 	@test length(res.bbo_best_feasible)==length(param.output_types)
 	(success,count_eval,bbo_bf) = eval(res.best_feasible)
+	println("res.best_feasible = $(res.best_feasible)")
 	@test bbo_bf ≈ res.bbo_best_feasible
 
 	if res.has_infeasible

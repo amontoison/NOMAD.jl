@@ -1,0 +1,2 @@
+- In optim_test, third test param settings contain param2
+- if libraries cannot be read, advise build NOMAD and relaunch Julia (in warning)

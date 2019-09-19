@@ -42,30 +42,36 @@ end
 
 param1=nomadParameters([5,5],["OBJ"])
 param1.max_bb_eval=100
+param1.seed=-1
 
 param2=nomadParameters([5,5],["OBJ","PB"])
 param2.max_bb_eval=50
 param2.LH_init=20
+param2.seed=-1
 
 param3=nomadParameters(param1)
 param3.max_time=2
 param3.sgte_cost=10
-param2.lower_bound=[1,1]
-param2.upper_bound=[10,10]
+param3.lower_bound=[1,1]
+param3.upper_bound=[10,10]
 param3.VNS_search=true
+param3.seed=-1
 
 param4=nomadParameters([5,5,5],["OBJ","EB","STAT_SUM","STAT_AVG"])
-param4.LH_iter=3
+param4.LH_iter=3res.best_feasible
 param4.display_stats="bbe ( sol ) obj ; stat_avg ; stat_sum"
 param4.stat_sum_target=50000
+param4.seed=-1
 
 param5=nomadParameters([5,1,5.2],["OBJ"])
 param5.input_types = ["I","B","R"]
 param5.granularity[3]=0.2
+param5.seed=-1
 
 param6=nomadParameters([[-14,70],[1,2]],["OBJ","PB"])
 param6.display_all_eval=true
 param6.stop_if_feasible=true
+param6.seed=-1
 
 #classic run
 result1 = nomad(eval1,param1)
