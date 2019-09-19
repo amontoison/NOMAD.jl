@@ -8,12 +8,12 @@ are consistent with settings of a nomadParameters object and with a function eva
 """
 function test_results_consistency(res::nomadResults,param::nomadParameters,eval::Function)
 
+	println("res.best_feasible = $(res.best_feasible)")
 	@test length(res.best_feasible)==param.dimension
 	@test right_input_type(res.best_feasible,param.input_types)
 	@test right_granularity(res.best_feasible,param.granularity)
 	@test length(res.bbo_best_feasible)==length(param.output_types)
 	(success,count_eval,bbo_bf) = eval(res.best_feasible)
-	println("res.best_feasible = $(res.best_feasible)")
 	@test bbo_bf ≈ res.bbo_best_feasible
 
 	if res.has_infeasible
