@@ -64,7 +64,7 @@ function right_granularity(x,gr)
 	right_granularity=true
 	try
 		for i=1:length(x)
-			gr[i]==0 || Int(round(x[i]/gr[i],digits=14))
+			gr[i]==0 || x[i]<1e-14 || Int(round(x[i]/gr[i],digits=13))
 		end
 	catch
 		right_granularity=false
