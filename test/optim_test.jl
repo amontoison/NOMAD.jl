@@ -58,7 +58,7 @@ param3.VNS_search=true
 param3.seed=-1
 
 param4=nomadParameters([5,5,5],["OBJ","EB","STAT_SUM","STAT_AVG"])
-param4.LH_iter=3res.best_feasible
+param4.LH_iter=3
 param4.display_stats="bbe ( sol ) obj ; stat_avg ; stat_sum"
 param4.stat_sum_target=50000
 param4.seed=-1
