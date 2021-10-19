@@ -4,8 +4,6 @@ using Libdl
 if haskey(ENV, "JULIA_NOMAD_LIBRARY_PATH")
     println("Debug: Version 4.1")
     const libnomadCInterface = joinpath(ENV["JULIA_NOMAD_LIBRARY_PATH"], "libnomadCInterface.$dlext")
-else
-    using NOMAD_jll
 end
 
 ######################################################
